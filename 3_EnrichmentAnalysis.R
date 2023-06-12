@@ -50,18 +50,19 @@ hs_gsea_c5 <- msigdbr(species = "Homo sapiens",
                       category = "C5") %>% # msigdb collection of interest
   dplyr::select(gs_name, gene_symbol)
 
-# Make GSEA data input
+# GSEA data input
 myDataGSEA <- contrast_list$wt_4h$pos$log2FoldChange %>% 
   'names<-'(rownames(contrast_list$wt_4h$pos)) %>% 
   sort(decreasing = T)
 
+# GSEA analysis
 myGSEA.res.c2 <- GSEA(myDataGSEA, TERM2GENE = hs_gsea_c2,verbose = F)
 myGSEA.df.c2 <- as_tibble(myGSEA.res.C2@result)
 
 myGSEA.res.c5 <- GSEA(myDataGSEA, TERM2GENE = hs_gsea_c5,verbose = F)
 myGSEA.df.c5 <- as_tibble(myGSEA.res.c5@result)
 
-
+# Visualize GSEA output - interactive table : C2 - curated gene sets
 datatable(myGSEA.df.c2, 
           extensions = c('KeyTable', "FixedHeader"), 
           caption = 'Signatures enriched in leishmaniasis',
@@ -77,6 +78,7 @@ gseaplot2(myGSEA.res.c2,
           pvalue_table = F, 
           title = myGSEA.res.c2$Description[1]) 
 
+# Visualize GSEA output - interactive table : C5 -	ontology gene sets
 datatable(myGSEA.df.c5, 
           extensions = c('KeyTable', "FixedHeader"), 
           caption = 'Signatures enriched in leishmaniasis',
