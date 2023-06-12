@@ -1,6 +1,7 @@
 # Import libraries ----
 library(DESeq2)
 library(EnhancedVolcano)
+library(flow)
 library(ggplot2)
 library(ggrepel)
 library(plotly)
@@ -12,7 +13,7 @@ library(stringr)
 library(tidyverse)
 library(vsn)
 
-# Functions
+# functions ----
 getNames <- function(list){
   name <- names(list) %>% 
     str_extract( "([0-9]+h|wt)_([0-9]+h|wt)") %>% 
@@ -24,8 +25,8 @@ getNames <- function(list){
     })
 }
 
-# Open pdf to save graphs
-pdf("graph_tnfa.pdf", width = 11, height = 8.5)
+# Pdf data collection
+pdf("graph_tnfa.pdf", width = 11, height = 8.5, onefile = T)
 
 # Make the design table ----
 design.table <- data.frame(
@@ -45,50 +46,46 @@ dds <- DESeqDataSetFromTximport(txi.kallisto,
 # Run DESeq2
 dds <- DESeq(dds)
 
-# Implement contrast between conditions + correct for NAs
+# Implement contrast between conditions + correct for NAs ----
 graph_list <- list(
-con_24h_4h <- results(dds,contrast=c("condition", "TNFa_4h", "TNFa_24h")) %>% 
+con_24h_4h = results(dds,contrast=c("condition", "TNFa_4h", "TNFa_24h")) %>% 
   na.omit(),
-con_wt_4h <- results(dds, contrast=c("condition", "TNFa_24h", "WT")) %>% 
+con_wt_4h = results(dds, contrast=c("condition", "TNFa_24h", "WT")) %>% 
   na.omit(),
-con_wt_24h <- results(dds, contrast=c("condition", "TNFa_4h", "WT")) %>% 
+con_wt_24h = results(dds, contrast=c("condition", "TNFa_4h", "WT")) %>% 
   na.omit()
 )
 
-# Keep  genes with [padj < 0.01] & [log2FC > 1.5]
-visualize_data <- list()
-for(i in seq_along(graph_list){
-  filtered <- graph_list[[i]][con_24h_4h$padj < 0.01 &
-                              abs(con_24h_4h$log2FoldChange) > log2(1.5), ]
-}
-
-# Order by padj
-con_24h_4h.order <- con_24h_4h.filt[order(con_24h_4h.filt$padj), ]
-con_wt_4h.order <- con_wt_4h.filt[order(con_wt_4h.filt$padj), ]
-con_wt_24h.order <- con_wt_24h.filt[order(con_wt_24h.filt$padj), ]
-
-# Seperate the upregulated from the downregulated
-list_24h_4h <- list(
-  pos = con_24h_4h.order[con_24h_4h.order$log2FoldChange > 0, ],
-  neg = con_24h_4h.order[!con_24h_4h.order$log2FoldChange > 0, ]
-)
-list_wt_4h <- list(
-  pos <- con_wt_4h.order[con_wt_4h.order$log2FoldChange > 0, ],
-  neg <- con_wt_4h.order[!con_wt_4h.order$log2FoldChange > 0, ]
-)
-list_wt_24h <- list(
-  pos <- con_wt_24h.order[con_wt_24h.order$log2FoldChange > 0, ],
-  neg <- con_wt_24h.order[!con_wt_24h.order$log2FoldChange > 0, ]
-)
-
-# Regroup in a list for further usage
-contrasts.list <- list(con_24h_4h=list_24h_4h,
-                       con_wt_4h=list_wt_4h,
-                       con_wt_24h=list_wt_24h)
-
-# Volcano plots ----
+# Organize data for functional analysis ----
+contrast_list <- list()
 
 for(i in seq_along(graph_list)){
+  
+  # Extract list name
+  listName <- names(graph_list[i]) %>% 
+    str_extract("(wt|[0-9]+h)_(wt|[0-9]+h)")
+  listName <- if(grepl("^[0-9]", listName)) paste0("_", listName) else listName
+  subList <- graph_list[[i]]
+  # Filtering for p-adj < 0.01 & log2(FC) > 1.5
+  filtered <- subList[subList$padj < 0.01 & 
+                        abs(subList$log2FoldChange) > log2(1.5), ]
+  # Ordered by p-adj
+  ordered <- filtered[order(filtered$padj), ]
+  
+  # Seperate the upregulated from the downregulated
+  decisionSet <- ordered$log2FoldChange > 0 
+  myList <- list(
+    pos = ordered[decisionSet > 0, ],
+    neg = ordered[!decisionSet > 0, ]
+  )
+
+  contrast_list <- append(contrast_list, list(myList))
+  names(contrast_list)[i] <- listName
+}
+
+# Volcano plots ----
+for(i in seq_along(graph_list)){
+  
   names <- getNames(graph_list[i])
 
   value <- graph_list[[i]]
@@ -104,7 +101,8 @@ for(i in seq_along(graph_list)){
     geom_vline(xintercept = 0,
                linetype = "dashed",
                alpha = 0.5) +
-    labs(title = paste0("Volcano plot: ", name[[2]], " in relation to ", name[[1]]),
+    labs(title = paste0("Volcano plot: ", names[[2]], 
+                        " in relation to ", names[[1]]),
          x = expression(log[2]("Fold Change")),
          y = expression(-log[10]("adjusted pValue")),
          caption = paste("Produced on", Sys.time())) +
@@ -143,11 +141,11 @@ con_wt_24h.noNA.filt = lfcShrink(dds,
 for (i in seq_along(ma_data)){
   names <- getNames(ma_data[i])
   value <- ma_data[[i]]
-  ggplot(value)
+
   myMA <- plotMA(value, colSig= "royalblue4", alpha = 0.01, 
-         main=paste0("MAplot: ", names[2], " in relation to ", names[1]),
+         main=paste0("MAplot: ", names[[2]], " in relation to ", names[[1]]),
          ylab="log (FC)") 
-    break
+  print(myMA)
 }
 
 # Effects of transformations on the variance ----
@@ -166,18 +164,22 @@ namesPCA <- attr(pcaData,"names")
 pca <- ggplot(pcaData) +
   aes(PC1, PC2, color=condition, shape=sample) +
   geom_point(size=3) +
-  xlab(paste0(namesPCA[1], ": ", percentVar[1], " %")) +
-  ylab(paste0(namesPCA[2], ": ", percentVar[2], " %")) + 
+  labs(title = paste("Principal Component Analysis (PCA) - TNF\u03B1 data"),
+       x = paste0(namesPCA[1], ": ", percentVar[1], " %"),
+       y = paste0(namesPCA[2], ": ", percentVar[2], " %"),
+       caption = paste("Produced on", Sys.time())) +
   coord_fixed() +
   theme_bw()
+
 print(pca)
+
 
 # Heatmap of the count matrix
 select <- order(rowMeans(counts(dds,normalized=TRUE)),decreasing=TRUE)[1:100]
 df <- as.data.frame(colData(dds))
 
 heat <- pheatmap(assay(vsd)[select,], cluster_rows=T, show_rownames=FALSE,
-         cluster_cols=FALSE, annotation_col=df)
+         cluster_cols=F, annotation_col=df)
 print(heat)
 
 # Get sample-to-sample distance
@@ -193,6 +195,8 @@ dist_mat <- pheatmap(sampleDistMatrix,
          clustering_distance_cols=sampleDists,
          col=colors,
          main="Sample-to-sample Distance visualization")
+
 print(dist_mat)
 
+# Print datas in PDF
 grDevices::dev.off()
