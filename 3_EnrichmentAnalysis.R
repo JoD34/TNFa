@@ -39,13 +39,12 @@ hs_gsea %>%
   dplyr::distinct(gs_cat, gs_subcat) %>% 
   dplyr::arrange(gs_cat, gs_subcat)
 
-# C2 - curated gene sets from online pathway databases, publications in PubMed,
-#      and knowledge of domain experts.
+# C2: Curated genes - Online pathway databases
 hs_gsea_c2 <- msigdbr(species = "Homo sapiens", 
                       category = "C2") %>% # msigdb collection of interest
   dplyr::select(gs_name, gene_symbol) 
 
-# C5 -	ontology gene sets consist of genes annotated by the same ontology term
+# C5: Ontology genes
 hs_gsea_c5 <- msigdbr(species = "Homo sapiens", 
                       category = "C5") %>% # msigdb collection of interest
   dplyr::select(gs_name, gene_symbol)
@@ -81,7 +80,7 @@ gseaplot2(myGSEA.res.c2,
 # Visualize GSEA output - interactive table : C5 -	ontology gene sets
 datatable(myGSEA.df.c5, 
           extensions = c('KeyTable', "FixedHeader"), 
-          caption = 'Signatures enriched in leishmaniasis',
+          caption = 'Signatures enriched in TNF\u03B1 inflammation',
           options = list(keys = TRUE, 
                          searchHighlight = TRUE, 
                          pageLength = 10, 

@@ -58,6 +58,7 @@ con_wt_24h = results(dds, contrast=c("condition", "TNFa_4h", "WT")) %>%
 
 # Organize data for functional analysis ----
 contrast_list <- list()
+GSEA_data_list <- list()
 
 for(i in seq_along(graph_list)){
   
@@ -66,11 +67,17 @@ for(i in seq_along(graph_list)){
     str_extract("(wt|[0-9]+h)_(wt|[0-9]+h)")
   listName <- if(grepl("^[0-9]", listName)) paste0("_", listName) else listName
   subList <- graph_list[[i]]
+  
   # Filtering for p-adj < 0.01 & log2(FC) > 1.5
   filtered <- subList[subList$padj < 0.01 & 
                         abs(subList$log2FoldChange) > log2(1.5), ]
   # Ordered by p-adj
   ordered <- filtered[order(filtered$padj), ]
+  
+  # Get data for GSEA analysis
+  GSEA_data_list <- append(GSEA_data_list, 
+                           list(ordered["log2FoldChange"]))
+  names(GSEA_data_list)[i] <- listName
   
   # Seperate the upregulated from the downregulated
   decisionSet <- ordered$log2FoldChange > 0 
@@ -79,6 +86,7 @@ for(i in seq_along(graph_list)){
     neg = ordered[!decisionSet > 0, ]
   )
 
+  # Get data for GO analysis
   contrast_list <- append(contrast_list, list(myList))
   names(contrast_list)[i] <- listName
 }
@@ -156,7 +164,10 @@ meanSD <- meanSdPlot(assay(vsd))
 print(meanSD)
 
 # PCA analysis
-pcaData <- plotPCA(vsd, intgroup=c("condition", "sample"), returnData=T, ntop=5000)
+pcaData <- plotPCA(vsd, 
+                   intgroup=c("condition", "sample"),
+                   returnData=T,
+                   ntop=50000)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
 namesPCA <- attr(pcaData,"names")
 
