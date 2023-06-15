@@ -9,6 +9,9 @@ library(GSEABase)
 library(GSVA)
 library(msigdbr)
 library(tidyverse)
+library(xlsx)
+
+# GO analysis ----
 
 pdf_width <- 11
 pdf_height <- 8.5
@@ -30,76 +33,98 @@ lapply(contrast_list, function(list){
     
   })
 })
-dev.off()
 
-# get gsea for homo sapiens
+# GSEA analysis ----
+
+# Get gsea for Homo sapiens
 hs_gsea <- msigdbr(species = "Homo sapiens")
 
-hs_gsea %>% 
+gsea_list <- hs_gsea %>% 
   dplyr::distinct(gs_cat, gs_subcat) %>% 
   dplyr::arrange(gs_cat, gs_subcat)
 
-# C2: Curated genes - Online pathway databases
-hs_gsea_c2 <- msigdbr(species = "Homo sapiens", 
-                      category = "C2") %>% # msigdb collection of interest
-  dplyr::select(gs_name, gene_symbol) 
-
-# C5: Ontology genes
-hs_gsea_c5 <- msigdbr(species = "Homo sapiens", 
-                      category = "C5") %>% # msigdb collection of interest
-  dplyr::select(gs_name, gene_symbol)
-
 # GSEA data input
-myDataGSEA <- contrast_list$wt_4h$pos$log2FoldChange %>% 
-  'names<-'(rownames(contrast_list$wt_4h$pos)) %>% 
-  sort(decreasing = T)
+GSEA_data_list <- lapply(GSEA_data_list, function(x) {
+  data <- x$log2FoldChange %>% 
+    'names<-'(rownames(x)) %>% 
+    sort(decreasing = T)
+})
 
-# GSEA analysis
-myGSEA.res.c2 <- GSEA(myDataGSEA, TERM2GENE = hs_gsea_c2,verbose = F)
-myGSEA.df.c2 <- as_tibble(myGSEA.res.C2@result)
+# Make list categories
+myGSEA.res <- list()
+cat_list <- c("C2","C5")
 
-myGSEA.res.c5 <- GSEA(myDataGSEA, TERM2GENE = hs_gsea_c5,verbose = F)
-myGSEA.df.c5 <- as_tibble(myGSEA.res.c5@result)
+# Make GSEA data
+for (i in 1:length(cat_list)) {
+  mySig <- msigdbr(species = "Homo sapiens", category = cat_list[i]) %>%
+    dplyr::select(gs_name, gene_symbol) 
+  
+  myGSEA.res <- lapply(GSEA_data_list, function(gsea){
+    gsea <- GSEA(gsea, TERM2GENE = mySig,verbose = F)
+  })
+}
+  
+myGSEA.df <- lapply(myGSEA.res, function(gsea){as_tibble(gsea@result)})
 
-# Visualize GSEA output - interactive table : C2 - curated gene sets
-datatable(myGSEA.df.c2, 
-          extensions = c('KeyTable', "FixedHeader"), 
-          caption = 'Signatures enriched in leishmaniasis',
-          options = list(keys = TRUE, 
-                         searchHighlight = TRUE, 
-                         pageLength = 10, 
-                         lengthMenu = c("10", "25", "50", "100"))) %>%
-  formatRound(columns=c(3:10), digits=2)
- 
+# Send GSEA to excel table
+for(i in 1:length(myGSEA.df)){
+  write.xlsx(myGSEA.df[i], 
+             file= "GSEAdata.xlsx",
+             sheetName = names(myGSEA.df)[i],
+             col.names = T,
+             row.names = T,
+             append = T)
+  }
 
-gseaplot2(myGSEA.res.c2, 
-          geneSetID = 1, 
-          pvalue_table = F, 
-          title = myGSEA.res.c2$Description[1]) 
-
-# Visualize GSEA output - interactive table : C5 -	ontology gene sets
-datatable(myGSEA.df.c5, 
+# Visualize GSEA output - interactive table 
+datatable(myGSEA.df[[1]],
           extensions = c('KeyTable', "FixedHeader"), 
           caption = 'Signatures enriched in TNF\u03B1 inflammation',
           options = list(keys = TRUE, 
                          searchHighlight = TRUE, 
                          pageLength = 10, 
                          lengthMenu = c("10", "25", "50", "100"))) %>%
-  formatRound(columns=c(3:10), digits=2)
+  formatRound(columns=c(3:10), digits=2) 
+ 
+# Plot GSEA output + graph 
+for(i in 1:length(myGSEA.res)){
+  PDFname <- paste0("GSEAplot_", names(myGSEA.res)[i],".pdf")
+  pdf(PDFname)
+  elem <- myGSEA.res[[i]]
+  
+  for (j in 1:nrow(myGSEA.df[[i]])){
+    myplotg <- gseaplot2(elem, 
+                         geneSetID = j, 
+                         pvalue_table = F, 
+                         title = elem$Description[j])
+    print(myplotg)
+    }
+  dev.off()
+}
 
-gseaplot2(myGSEA.res.c5, 
-          geneSetID = 1, 
-          pvalue_table = F, 
-          title = myGSEA.res.c5$Description[1]) 
+# DataFrame for "bubble plot"
+for(i in 1:length(myGSEA.df)){
+  name <- str_split_1(str_extract(names(myGSEA.df)[1],"[0-9]+h_[0-9]+h"),"_") %>% 
+    paste0("TNF\u03B1-", .)
+  
+  myGSEA.df[[i]] <- myGSEA.df[[i]] %>% 
+    mutate(phenotype = case_when(NES > 0 ~ name,
+                                 NES < 0 ~ "Wild Type"))
+  }
 
+# Bubble plot summarizing 'y' signatures across 'x' phenotypes - C2
+pdf("GSEA_bubble.pdf", width = 11, height=8.5)
 
-myGSEA.df <- myGSEA.df.c2 %>%
-  mutate(phenotype = case_when(
-    NES > 0 ~ "disease",
-    NES < 0 ~ "healthy"))
-
-# create 'bubble plot' to summarize y signatures across x phenotypes
-ggplot(myGSEA.df[1:20,], aes(x=phenotype, y=ID)) + 
-  geom_point(aes(size=setSize, color = NES, alpha=-log10(p.adjust))) +
-  scale_color_gradient(low="blue", high="red") +
-  theme_bw()
+for (i in 1:length(myGSEA.df)){
+  
+  bubbly <- ggplot(myGSEA.df[[i]][1:20,]) +
+    aes(x = phenotype, y = ID) +
+    geom_point(aes(size = setSize, 
+                   color = NES, 
+                   alpha = -log10(p.adjust))) +
+    scale_color_gradient(low = "blue", high = "red") +
+    theme_bw()
+  
+  print(bubbly)
+}
+dev.off()

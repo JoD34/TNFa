@@ -16,12 +16,12 @@ library(vsn)
 # functions ----
 getNames <- function(list){
   name <- names(list) %>% 
-    str_extract( "([0-9]+h|wt)_([0-9]+h|wt)") %>% 
+    str_extract( "([0-9]+(h)?|wt)_([0-9]+(h)?|wt)") %>% 
     strsplit("_") %>% 
     unlist() %>% 
     sapply(function(elem){
-      elem <- if(!(elem %in% "wt")) 
-        paste0("TNF","\u03B1","-",elem) else "Wild Type"
+      elem <- ifelse(grepl("wt|h",elem),if(!(elem %in% "wt")) 
+        paste0("TNF","\u03B1","-",elem) else "Wild Type", elem)
     })
 }
 
@@ -48,11 +48,11 @@ dds <- DESeq(dds)
 
 # Implement contrast between conditions + correct for NAs ----
 graph_list <- list(
-con_24h_4h = results(dds,contrast=c("condition", "TNFa_4h", "TNFa_24h")) %>% 
+con_24h_4h = results(dds,contrast = c("condition", "TNFa_4h", "TNFa_24h")) %>% 
   na.omit(),
-con_wt_4h = results(dds, contrast=c("condition", "TNFa_24h", "WT")) %>% 
+con_wt_4h = results(dds, contrast = c("condition", "TNFa_24h", "WT")) %>% 
   na.omit(),
-con_wt_24h = results(dds, contrast=c("condition", "TNFa_4h", "WT")) %>% 
+con_wt_24h = results(dds, contrast = c("condition", "TNFa_4h", "WT")) %>% 
   na.omit()
 )
 
@@ -95,9 +95,8 @@ for(i in seq_along(graph_list)){
 for(i in seq_along(graph_list)){
   
   names <- getNames(graph_list[i])
-
   value <- graph_list[[i]]
-  labels <- data.frame(value[order(log10(value$padj)), ][1:25,])
+  myLabels <- value[order(log(value$padj)), ][1:20, ]
   
   myPlot <- ggplot(as_tibble(value)) +
     aes(x = log2FoldChange, 
@@ -109,6 +108,11 @@ for(i in seq_along(graph_list)){
     geom_vline(xintercept = 0,
                linetype = "dashed",
                alpha = 0.5) +
+    geom_text_repel(data = as_tibble(myLabels),
+                    label = rownames(myLabels),
+                    size = 3,
+                    box.padding = 0.5,
+                    point.padding = 0.2) +
     labs(title = paste0("Volcano plot: ", names[[2]], 
                         " in relation to ", names[[1]]),
          x = expression(log[2]("Fold Change")),
@@ -149,7 +153,7 @@ con_wt_24h.noNA.filt = lfcShrink(dds,
 for (i in seq_along(ma_data)){
   names <- getNames(ma_data[i])
   value <- ma_data[[i]]
-
+  
   myMA <- plotMA(value, colSig= "royalblue4", alpha = 0.01, 
          main=paste0("MAplot: ", names[[2]], " in relation to ", names[[1]]),
          ylab="log (FC)") 
@@ -211,3 +215,4 @@ print(dist_mat)
 
 # Print datas in PDF
 grDevices::dev.off()
+
