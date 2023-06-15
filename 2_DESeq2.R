@@ -190,7 +190,7 @@ print(pca)
 
 
 # Heatmap of the count matrix
-select <- order(rowMeans(counts(dds,normalized=TRUE)),decreasing=TRUE)[1:100]
+select <- order(rowMeans(counts(dds,normalized=TRUE)),decreasing=TRUE)
 df <- as.data.frame(colData(dds))
 
 heat <- pheatmap(assay(vsd)[select,], cluster_rows=T, show_rownames=FALSE,
