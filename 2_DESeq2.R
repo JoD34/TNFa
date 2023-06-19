@@ -1,13 +1,9 @@
 # Import libraries ----
 library(DESeq2)
-library(EnhancedVolcano)
-library(flow)
 library(ggplot2)
 library(ggrepel)
-library(plotly)
 library(pheatmap)
 library(RColorBrewer)
-library(ReportingTools)
 library(scales)
 library(stringr)
 library(tidyverse)

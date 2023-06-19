@@ -11,6 +11,13 @@ library(msigdbr)
 library(tidyverse)
 library(xlsx)
 
+# Function
+getSheetName <- function(list){
+  name <- names(list) %>% 
+    str_extract( "([0-9]+(h)?|wt)_([0-9]+(h)?|wt)") %>% 
+    gsub("_","_vs_",.)
+}
+
 # GO analysis ----
 
 pdf_width <- 11
@@ -33,6 +40,16 @@ lapply(contrast_list, function(list){
     
   })
 })
+
+# GO data extraction
+lapply(graph_list, function(x){
+  sublist_name <- getSheetName(graph_list[sapply(graph_list, identical, x)])
+  write.xlsx(x,
+             file = "TNFa.xlsx",
+             sheetName = paste0(sublist_name, "_fullData"),
+             append = T)
+})
+
 
 # GSEA analysis ----
 
